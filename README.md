@@ -1,6 +1,8 @@
 # mutter-xwayland-scaling
+
 Mutter build with Xwayland native fractional scaling patch.
-https://github.com/HydroH/gnome-settings-daemon-xwayland-scaling must also be installed to work.
+
+[gnome-settings-daemon-xwayland-scaling](https://github.com/HydroH/gnome-settings-daemon-xwayland-scaling) must also be installed to work.
 
 ---
 To enable xwayland native fractional scaling after installation run:
