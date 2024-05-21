@@ -30,7 +30,7 @@ depends=(
   glib2
   glibc
   gnome-desktop-4
-  gnome-settings-daemon
+  gnome-settings-daemon-xwayland-scaling
   graphene
   gsettings-desktop-schemas
   gtk4
