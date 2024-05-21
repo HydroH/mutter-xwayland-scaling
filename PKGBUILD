@@ -13,7 +13,7 @@
 
 pkgname=mutter-xwayland-scaling
 pkgver=46.1
-pkgrel=3
+pkgrel=1
 pkgdesc="Window manager and compositor for GNOME with Xwayland fractional scaling patch"
 url="https://gitlab.gnome.org/GNOME/mutter"
 arch=(x86_64)
