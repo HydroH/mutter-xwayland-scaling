@@ -1,0 +1,6 @@
+/src
+/pkg
+/mutter
+.vscode
+*.pkg.tar.zst
+*.tar.gz
