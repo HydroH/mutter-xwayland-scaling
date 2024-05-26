@@ -74,6 +74,6 @@ pkgbase = mutter-xwayland-scaling
 	source = git+https://gitlab.gnome.org/GNOME/mutter.git#tag=46.2
 	source = xwayland-scaling.patch
 	b2sums = 4b474f4bbb5ed15db053cba509c3f4b0d112a74359597dc1ab9af118b0e1360a20ccc6af89af3b248895e5dd95193c039cd3396b0fd2c71a0deadc3ff4e15920
-	b2sums = e26e129e5d8aff9a3c4f07930ce2c340b3770a260a995b54e595a9e91d36cfc3862f9948302c24b9d35d3b1f6bcbdaf6010d7dd87d5fa69a275728970aac75fc
+	b2sums = 97bea1b4d7251691d29d3cb3dceeb7afd776b94298ec73fe4f4cd8a72dbfad8bd43cc9a1e2185750f3f02b78b48caa56f246737fba8d117f8c83090555b39ee7
 
 pkgname = mutter-xwayland-scaling

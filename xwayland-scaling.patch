@@ -1,92 +1,7 @@
-From 07b4778da8e853acd88eb9e5a30b132303b3a79c Mon Sep 17 00:00:00 2001
-From: Sebastian Keller <skeller@gnome.org>
-Date: Tue, 23 Apr 2024 20:45:36 +0200
-Subject: [PATCH 1/7] x11/window: Compare input shape to client rect when
- undecorating
-
-When a window with an input shape on its decoration window becomes
-undecorated and meta_window_x11_update_input_region() gets called via
-notify::decorated, the buffer_rect of the window has not been updated
-yet while the decorated property has. This would lead to us comparing
-the input shape of the client window to the buffer_rect which still
-includes the decoration window. This would fail to detect the common
-case when the client window has no input shape set, leading to the input
-region being set to the size of the client window rather than NULL. If
-the window is then resized later, the input shape would remain at the
-previous size.
-
-This was not a problem before 6bd920b35, because then we were (wrongly)
-always comparing to the client_rect.
-
-Fix this by choosing the correct rect for comparison depending on
-whether the window is decorated.
-
-Fixes: 6bd920b35 ("x11/window: Use correct bounding rect to determine NULL input region")
-Closes: https://gitlab.gnome.org/GNOME/mutter/-/issues/3451
----
- src/x11/window-x11.c | 16 +++++++---------
- 1 file changed, 7 insertions(+), 9 deletions(-)
-
-diff --git a/src/x11/window-x11.c b/src/x11/window-x11.c
-index 210f4a133..8afe61918 100644
---- a/src/x11/window-x11.c
-+++ b/src/x11/window-x11.c
-@@ -2400,6 +2400,7 @@ meta_window_x11_update_input_region (MetaWindow *window)
-   g_autoptr (MtkRegion) region = NULL;
-   MetaWindowX11 *window_x11 = META_WINDOW_X11 (window);
-   MetaWindowX11Private *priv = meta_window_x11_get_instance_private (window_x11);
-+  MtkRectangle bounding_rect = { 0 };
-   Window xwindow;
- 
-   if (window->decorated)
-@@ -2411,10 +2412,14 @@ meta_window_x11_update_input_region (MetaWindow *window)
-           return;
-         }
-       xwindow = window->frame->xwindow;
-+      bounding_rect.width = window->buffer_rect.width;
-+      bounding_rect.height = window->buffer_rect.height;
-     }
-   else
-     {
-       xwindow = priv->xwindow;
-+      bounding_rect.width = priv->client_rect.width;
-+      bounding_rect.height = priv->client_rect.height;
-     }
- 
-   if (META_X11_DISPLAY_HAS_SHAPE (x11_display))
-@@ -2458,8 +2463,8 @@ meta_window_x11_update_input_region (MetaWindow *window)
-       else if (n_rects == 1 &&
-                (rects[0].x == 0 &&
-                 rects[0].y == 0 &&
--                rects[0].width == window->buffer_rect.width &&
--                rects[0].height == window->buffer_rect.height))
-+                rects[0].width == bounding_rect.width &&
-+                rects[0].height == bounding_rect.height))
-         {
-           /* This is the bounding region case. Keep the
-            * region as NULL. */
-@@ -2476,13 +2481,6 @@ meta_window_x11_update_input_region (MetaWindow *window)
- 
-   if (region != NULL)
-     {
--      MtkRectangle bounding_rect;
--
--      bounding_rect.x = 0;
--      bounding_rect.y = 0;
--      bounding_rect.width = window->buffer_rect.width;
--      bounding_rect.height = window->buffer_rect.height;
--
-       /* The shape we get back from the client may have coordinates
-        * outside of the frame. The X SHAPE Extension requires that
-        * the overall shape the client provides never exceeds the
--- 
-2.45.1
-
-
-From b81416962c3b2c7e9f43b2ed39691279c45b5173 Mon Sep 17 00:00:00 2001
+From 88b8fdd1df3de74db6a042854a4341672223aba5 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20=C3=85dahl?= <jadahl@gmail.com>
 Date: Tue, 12 Dec 2023 22:41:20 +0100
-Subject: [PATCH 2/7] x11-display: Expose UI scaling factor via D-Bus
+Subject: [PATCH 1/6] x11-display: Expose UI scaling factor via D-Bus
 
 This replaces the `legacy-ui-scaling-factor` entry in
 `org.gnome.Mutter.DisplayConfig`, with the motivation being to no longer
@@ -297,10 +212,10 @@ index 438f3bd1e..5f768f6e9 100644
 2.45.1
 
 
-From 27893f5bde5ade2860570026656613e80f9d5086 Mon Sep 17 00:00:00 2001
+From 9a3c7b6336a0e8181360e497cf86ba65f26833c0 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20Dre=C3=9Fler?= <verdre@v0yd.nl>
 Date: Tue, 20 Feb 2024 23:51:48 +0100
-Subject: [PATCH 3/7] Add an experimental feature for letting Xwayland clients
+Subject: [PATCH 2/6] Add an experimental feature for letting Xwayland clients
  scale natively
 
 With the next commits we'll introduce a new mode for scaling of Xwayland apps,
@@ -366,10 +281,10 @@ index 3703b23b0..1ae59d636 100644
 2.45.1
 
 
-From f51db1001d7ac36bf288d4f487405e4d0c00d850 Mon Sep 17 00:00:00 2001
+From 1b58d5597101cadaa428bc533574aed750ba2b68 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20=C3=85dahl?= <jadahl@gmail.com>
 Date: Tue, 12 Dec 2023 22:42:46 +0100
-Subject: [PATCH 4/7] context: Put Wayland compositor getter in the context
+Subject: [PATCH 3/6] context: Put Wayland compositor getter in the context
  header
 
 ---
@@ -421,10 +336,10 @@ index cbe2a9a3d..8fba4a839 100644
 2.45.1
 
 
-From 82aab1251afe71832e7fca055b2f016425451752 Mon Sep 17 00:00:00 2001
+From 32ed3727ac3dcaeffa3e29b35ca8b4223b68b170 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20=C3=85dahl?= <jadahl@gmail.com>
 Date: Tue, 12 Dec 2023 22:52:44 +0100
-Subject: [PATCH 5/7] Add experimental mode to use native scaling of Xwayland
+Subject: [PATCH 4/6] Add experimental mode to use native scaling of Xwayland
  clients
 
 Allow scale-aware Xwayland clients to scale by an integer scale
@@ -1652,7 +1567,7 @@ index c18b3eab5..494fbe843 100644
    /* Put back saved ConfigureRequest. */
    window->size_hints.x = x;
 diff --git a/src/x11/window-x11.c b/src/x11/window-x11.c
-index 8afe61918..24e342b71 100644
+index 443f40f28..b72d5b6d5 100644
 --- a/src/x11/window-x11.c
 +++ b/src/x11/window-x11.c
 @@ -110,6 +110,113 @@ meta_window_x11_get_private (MetaWindowX11 *window_x11)
@@ -2038,7 +1953,7 @@ index 8afe61918..24e342b71 100644
  
    /* Handle stacking. We only handle raises/lowers, mostly because
     * stack.c really can't deal with anything else.  I guess we'll fix
-@@ -3329,8 +3500,13 @@ meta_window_x11_client_message (MetaWindow *window,
+@@ -3330,8 +3501,13 @@ meta_window_x11_client_message (MetaWindow *window,
        guint32 timestamp;
        MetaWindowDrag *window_drag;
  
@@ -2054,7 +1969,7 @@ index 8afe61918..24e342b71 100644
        action = event->xclient.data.l[2];
        button = event->xclient.data.l[3];
  
-@@ -3494,6 +3670,7 @@ meta_window_x11_client_message (MetaWindow *window,
+@@ -3495,6 +3671,7 @@ meta_window_x11_client_message (MetaWindow *window,
      {
        MetaGravity gravity;
        guint value_mask;
@@ -2062,7 +1977,7 @@ index 8afe61918..24e342b71 100644
  
        gravity = (MetaGravity) (event->xclient.data.l[0] & 0xff);
        value_mask = (event->xclient.data.l[0] & 0xf00) >> 8;
-@@ -3502,13 +3679,20 @@ meta_window_x11_client_message (MetaWindow *window,
+@@ -3503,13 +3680,20 @@ meta_window_x11_client_message (MetaWindow *window,
        if (gravity == 0)
          gravity = window->size_hints.win_gravity;
  
@@ -2087,7 +2002,7 @@ index 8afe61918..24e342b71 100644
      }
    else if (event->xclient.message_type ==
             x11_display->atom__NET_ACTIVE_WINDOW &&
-@@ -3565,11 +3749,15 @@ meta_window_x11_client_message (MetaWindow *window,
+@@ -3566,11 +3750,15 @@ meta_window_x11_client_message (MetaWindow *window,
    else if (event->xclient.message_type ==
             x11_display->atom__GTK_SHOW_WINDOW_MENU)
      {
@@ -2106,7 +2021,7 @@ index 8afe61918..24e342b71 100644
  
        meta_window_show_menu (window, META_WINDOW_MENU_WM, x, y);
      }
-@@ -4091,10 +4279,11 @@ meta_window_x11_configure_notify (MetaWindow      *window,
+@@ -4092,10 +4280,11 @@ meta_window_x11_configure_notify (MetaWindow      *window,
    g_assert (window->override_redirect);
    g_assert (window->frame == NULL);
  
@@ -2179,10 +2094,10 @@ index 205eaaa63..fa3fbea6a 100644
 2.45.1
 
 
-From a929fa52d5f742e755a79bfc6e760a9e5f85a896 Mon Sep 17 00:00:00 2001
+From 09712dd9002a7289e7e7aa34ca439f0dd7c5b386 Mon Sep 17 00:00:00 2001
 From: HydroH <ixlesis@gmail.com>
 Date: Tue, 21 May 2024 19:14:55 +0800
-Subject: [PATCH 6/7] Fix incorrect value for xwayland-native-scaling in
+Subject: [PATCH 5/6] Fix incorrect value for xwayland-native-scaling in
  org.gnome.mutter.gchema.xml.in
 
 ---
@@ -2206,17 +2121,17 @@ index 18abd8d51..6751a8d7a 100644
 2.45.1
 
 
-From 55f730be5c80ee49453d00e6ade9362790b787ed Mon Sep 17 00:00:00 2001
+From 010f3ad2b0059ce7f137aa6e20422b963431a142 Mon Sep 17 00:00:00 2001
 From: HydroH <ixlesis@gmail.com>
 Date: Tue, 21 May 2024 19:15:36 +0800
-Subject: [PATCH 7/7] Correctly set bounding region for undecorated windows
+Subject: [PATCH 6/6] Correctly set bounding region for undecorated windows
 
 ---
  src/x11/window-x11.c | 9 +++++++--
  1 file changed, 7 insertions(+), 2 deletions(-)
 
 diff --git a/src/x11/window-x11.c b/src/x11/window-x11.c
-index 24e342b71..8fbaeb76d 100644
+index b72d5b6d5..c48b91e93 100644
 --- a/src/x11/window-x11.c
 +++ b/src/x11/window-x11.c
 @@ -2572,8 +2572,13 @@ meta_window_x11_update_input_region (MetaWindow *window)
