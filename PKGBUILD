@@ -12,7 +12,7 @@
 # Author: Jonas Ådahl <jadahl@gmail.com>
 
 pkgname=mutter-xwayland-scaling
-pkgver=46.1
+pkgver=46.2
 pkgrel=1
 pkgdesc="Window manager and compositor for GNOME with Xwayland fractional scaling patch"
 url="https://gitlab.gnome.org/GNOME/mutter"
@@ -101,7 +101,7 @@ source=(
   "git+$url.git#tag=${pkgver/[a-z]/.&}"
   "xwayland-scaling.patch"
 )
-b2sums=('4acd4a192455890b12b2fc9b6553ed65bd2176307cd6c6683fc2ab476b7fa88f4b5e507a1209b3e900c68d94768f3cf749b4f5d87d25300b33a112182c8a62a7'
+b2sums=('4b474f4bbb5ed15db053cba509c3f4b0d112a74359597dc1ab9af118b0e1360a20ccc6af89af3b248895e5dd95193c039cd3396b0fd2c71a0deadc3ff4e15920'
         'e26e129e5d8aff9a3c4f07930ce2c340b3770a260a995b54e595a9e91d36cfc3862f9948302c24b9d35d3b1f6bcbdaf6010d7dd87d5fa69a275728970aac75fc')
 
 prepare() {
