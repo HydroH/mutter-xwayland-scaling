@@ -82,7 +82,6 @@ makedepends=(
   glib2-devel
   gobject-introspection
   meson
-  python-packaging
   sysprof
   wayland-protocols
 )

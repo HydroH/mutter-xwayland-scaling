@@ -3,4 +3,5 @@
 /mutter
 .vscode
 *.pkg.tar.zst
+*.tar
 *.tar.gz
