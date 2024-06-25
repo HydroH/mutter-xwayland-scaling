@@ -11,7 +11,6 @@ pkgbase = mutter-xwayland-scaling
 	makedepends = glib2-devel
 	makedepends = gobject-introspection
 	makedepends = meson
-	makedepends = python-packaging
 	makedepends = sysprof
 	makedepends = wayland-protocols
 	depends = at-spi2-core
