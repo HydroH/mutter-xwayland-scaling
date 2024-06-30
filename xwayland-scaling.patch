@@ -1,4 +1,4 @@
-From 88b8fdd1df3de74db6a042854a4341672223aba5 Mon Sep 17 00:00:00 2001
+From 41fdfc6ab52031d87428a3f16bbb2e90f2255642 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20=C3=85dahl?= <jadahl@gmail.com>
 Date: Tue, 12 Dec 2023 22:41:20 +0100
 Subject: [PATCH 1/6] x11-display: Expose UI scaling factor via D-Bus
@@ -209,10 +209,10 @@ index 438f3bd1e..5f768f6e9 100644
  
  static Bool
 -- 
-2.45.1
+2.45.2
 
 
-From 9a3c7b6336a0e8181360e497cf86ba65f26833c0 Mon Sep 17 00:00:00 2001
+From 23cb89bbae5d65a8c44b60793aa0d529250fd418 Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20Dre=C3=9Fler?= <verdre@v0yd.nl>
 Date: Tue, 20 Feb 2024 23:51:48 +0100
 Subject: [PATCH 2/6] Add an experimental feature for letting Xwayland clients
@@ -278,10 +278,10 @@ index 3703b23b0..1ae59d636 100644
        if (feature)
          g_message ("Enabling experimental feature '%s'", feature_str);
 -- 
-2.45.1
+2.45.2
 
 
-From 1b58d5597101cadaa428bc533574aed750ba2b68 Mon Sep 17 00:00:00 2001
+From 408ebc033d2c024f8cbc772b412f1f94b5270c8b Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20=C3=85dahl?= <jadahl@gmail.com>
 Date: Tue, 12 Dec 2023 22:42:46 +0100
 Subject: [PATCH 3/6] context: Put Wayland compositor getter in the context
@@ -333,10 +333,10 @@ index cbe2a9a3d..8fba4a839 100644
 +typedef struct _MetaWaylandCompositor MetaWaylandCompositor;
 +#endif
 -- 
-2.45.1
+2.45.2
 
 
-From 32ed3727ac3dcaeffa3e29b35ca8b4223b68b170 Mon Sep 17 00:00:00 2001
+From afdd33ce1111824e004b9809dc30ebe9037374af Mon Sep 17 00:00:00 2001
 From: =?UTF-8?q?Jonas=20=C3=85dahl?= <jadahl@gmail.com>
 Date: Tue, 12 Dec 2023 22:52:44 +0100
 Subject: [PATCH 4/6] Add experimental mode to use native scaling of Xwayland
@@ -362,7 +362,7 @@ together with "scale-monitor-framebuffer".
  src/backends/meta-monitor-manager-private.h |   2 +
  src/backends/meta-monitor-manager.c         |   6 +
  src/compositor/meta-window-actor-x11.c      |  22 +-
- src/core/frame.c                            | 106 +++++--
+ src/core/frame.c                            | 162 +++++++----
  src/wayland/meta-wayland-cursor-surface.c   |  52 ++--
  src/wayland/meta-wayland-outputs.c          |  42 ++-
  src/wayland/meta-wayland-pointer.c          |  14 +
@@ -377,7 +377,7 @@ together with "scale-monitor-framebuffer".
  src/x11/window-props.c                      | 108 ++++++-
  src/x11/window-x11.c                        | 305 ++++++++++++++++----
  src/x11/window-x11.h                        |  38 +++
- 18 files changed, 897 insertions(+), 166 deletions(-)
+ 18 files changed, 924 insertions(+), 195 deletions(-)
 
 diff --git a/src/backends/meta-monitor-manager-private.h b/src/backends/meta-monitor-manager-private.h
 index 0760a341a..6ed3fc2c3 100644
@@ -437,7 +437,7 @@ index 19827af33..7df10e6c1 100644
    meta_window_actor_notify_damaged (META_WINDOW_ACTOR (actor_x11));
  }
 diff --git a/src/core/frame.c b/src/core/frame.c
-index c74a2e04e..d45a8759b 100644
+index 7a09f89f1..844881f52 100644
 --- a/src/core/frame.c
 +++ b/src/core/frame.c
 @@ -33,6 +33,7 @@
@@ -447,38 +447,91 @@ index c74a2e04e..d45a8759b 100644
 +#include "x11/window-x11.h"
  
  #include <X11/Xatom.h>
- #include <X11/extensions/shape.h>
-@@ -66,6 +67,7 @@ meta_window_x11_set_frame_xwindow (MetaWindow *window,
+ #include <X11/Xlib.h>
+@@ -76,7 +77,8 @@ meta_window_x11_set_frame_xwindow (MetaWindow *window,
+   MetaX11Display *x11_display = window->display->x11_display;
    XSetWindowAttributes attrs;
    gulong create_serial = 0;
-   MetaFrame *frame;
+-  g_autoptr (MetaFrame) frame = NULL;
++  g_autoptr(MetaFrame) frame = NULL;
 +  int child_x, child_y;
  
    if (window->frame)
      return;
-@@ -127,11 +129,19 @@ meta_window_x11_set_frame_xwindow (MetaWindow *window,
-   meta_stack_tracker_record_remove (window->display->stack_tracker,
-                                     meta_window_x11_get_xwindow (window),
-                                     XNextRequest (x11_display->xdisplay));
-+  meta_window_x11_stage_to_protocol (META_WINDOW_X11 (window),
-+                                     frame->child_x,
-+                                     frame->child_y,
-+                                     0, 0,
-+                                     &child_x,
-+                                     &child_y,
-+                                     NULL, NULL);
+@@ -168,36 +170,42 @@ meta_window_x11_set_frame_xwindow (MetaWindow *window,
+       window->unmaps_pending += 1;
+     }
+ 
+-  /* stick frame to the window */
+-  window->frame = g_steal_pointer (&frame);
+-
+-  window->reparents_pending += 1;
+-
+-  /* Ensure focus is restored after the unmap/map events triggered
+-   * by XReparentWindow().
+-   */
+-  if (meta_window_has_focus (window))
+-    window->restore_focus_on_map = TRUE;
+-
+-  meta_window_reload_property_from_xwindow (window, window->frame->xwindow,
+-                                            x11_display->atom__NET_WM_SYNC_REQUEST_COUNTER,
+-                                            TRUE);
+-  meta_window_reload_property_from_xwindow (window, window->frame->xwindow,
+-                                            x11_display->atom__NET_WM_OPAQUE_REGION,
+-                                            TRUE);
+-
+-  mtk_x11_error_trap_push (x11_display->xdisplay);
+-  XMapWindow (x11_display->xdisplay, window->frame->xwindow);
+-  mtk_x11_error_trap_pop (x11_display->xdisplay);
+-
+-  /* Move keybindings to frame instead of window */
+-  meta_window_grab_keys (window);
+-
+-  /* Even though the property was already set, notify
+-   * on it so other bits of the machinery catch up
+-   * on the new frame.
+-   */
+-  g_object_notify (G_OBJECT (window), "decorated");
++    meta_window_x11_stage_to_protocol(META_WINDOW_X11(window),
++                                      frame->child_x,
++                                      frame->child_y,
++                                      0, 0,
++                                      &child_x,
++                                      &child_y,
++                                      NULL, NULL);
++    /* stick frame to the window */
++    window->frame = g_steal_pointer(&frame);
++    window->reparents_pending += 1;
 +
-   XReparentWindow (x11_display->xdisplay,
-                    meta_window_x11_get_xwindow (window),
-                    frame->xwindow,
--                   frame->child_x,
--                   frame->child_y);
-+                   child_x,
-+                   child_y);
-   window->reparents_pending += 1;
-   /* FIXME handle this error */
-   mtk_x11_error_trap_pop (x11_display->xdisplay);
-@@ -201,6 +211,8 @@ meta_window_destroy_frame (MetaWindow *window)
++    /* Ensure focus is restored after the unmap/map events triggered
++     * by XReparentWindow().
++     */
++    if (meta_window_has_focus(window))
++      window->restore_focus_on_map = TRUE;
++
++    meta_window_reload_property_from_xwindow(window, window->frame->xwindow,
++                                             x11_display->atom__NET_WM_SYNC_REQUEST_COUNTER,
++                                             TRUE);
++    meta_window_reload_property_from_xwindow(window, window->frame->xwindow,
++                                             x11_display->atom__NET_WM_OPAQUE_REGION,
++                                             TRUE);
++
++    mtk_x11_error_trap_push(x11_display->xdisplay);
++    XMapWindow(x11_display->xdisplay, window->frame->xwindow);
++    mtk_x11_error_trap_pop(x11_display->xdisplay);
++
++    /* Move keybindings to frame instead of window */
++    meta_window_grab_keys(window);
++
++    /* Even though the property was already set, notify
++     * on it so other bits of the machinery catch up
++     * on the new frame.
++     */
++    g_object_notify(G_OBJECT(window), "decorated");
+ }
+ 
+ void
+@@ -235,6 +243,8 @@ meta_window_destroy_frame (MetaWindow *window)
  
    if (!x11_display->closing)
      {
@@ -487,7 +540,7 @@ index c74a2e04e..d45a8759b 100644
        if (!window->unmanaging)
          {
            meta_stack_tracker_record_add (window->display->stack_tracker,
-@@ -208,6 +220,14 @@ meta_window_destroy_frame (MetaWindow *window)
+@@ -242,6 +252,14 @@ meta_window_destroy_frame (MetaWindow *window)
                                           XNextRequest (x11_display->xdisplay));
          }
  
@@ -502,17 +555,17 @@ index c74a2e04e..d45a8759b 100644
        XReparentWindow (x11_display->xdisplay,
                         meta_window_x11_get_xwindow (window),
                         x11_display->xroot,
-@@ -215,8 +235,7 @@ meta_window_destroy_frame (MetaWindow *window)
+@@ -249,8 +267,7 @@ meta_window_destroy_frame (MetaWindow *window)
                          * coordinates here means we'll need to ensure a configure
                          * notify event is sent; see bug 399552.
                          */
--                       window->frame->rect.x + borders.invisible.left,
--                       window->frame->rect.y + borders.invisible.top);
+-                       frame->rect.x + borders.invisible.left,
+-                       frame->rect.y + borders.invisible.top);
 +                       child_x, child_y);
        window->reparents_pending += 1;
      }
  
-@@ -270,6 +289,7 @@ meta_frame_query_borders (MetaFrame        *frame,
+@@ -297,6 +314,7 @@ meta_frame_query_borders (MetaFrame        *frame,
                            MetaFrameBorders *borders)
  {
    MetaWindow *window = frame->window;
@@ -520,7 +573,7 @@ index c74a2e04e..d45a8759b 100644
    MetaX11Display *x11_display = window->display->x11_display;
    int format, res;
    Atom type;
-@@ -293,12 +313,22 @@ meta_frame_query_borders (MetaFrame        *frame,
+@@ -320,12 +338,22 @@ meta_frame_query_borders (MetaFrame        *frame,
    if (mtk_x11_error_trap_pop_with_return (x11_display->xdisplay) == Success &&
        res == Success && nitems == 4)
      {
@@ -549,7 +602,7 @@ index c74a2e04e..d45a8759b 100644
      }
    else
      {
-@@ -321,12 +351,21 @@ meta_frame_query_borders (MetaFrame        *frame,
+@@ -348,12 +376,21 @@ meta_frame_query_borders (MetaFrame        *frame,
    if (mtk_x11_error_trap_pop_with_return (x11_display->xdisplay) == Success &&
        res == Success && nitems == 4)
      {
@@ -577,7 +630,7 @@ index c74a2e04e..d45a8759b 100644
      }
    else
      {
-@@ -374,7 +413,9 @@ meta_frame_sync_to_window (MetaFrame *frame,
+@@ -401,7 +438,9 @@ meta_frame_sync_to_window (MetaFrame *frame,
                             gboolean   need_resize)
  {
    MetaWindow *window = frame->window;
@@ -587,7 +640,7 @@ index c74a2e04e..d45a8759b 100644
  
    meta_topic (META_DEBUG_GEOMETRY,
                "Syncing frame geometry %d,%d %dx%d (SE: %d,%d)",
-@@ -385,12 +426,22 @@ meta_frame_sync_to_window (MetaFrame *frame,
+@@ -412,12 +451,22 @@ meta_frame_sync_to_window (MetaFrame *frame,
  
    mtk_x11_error_trap_push (x11_display->xdisplay);
  
@@ -614,7 +667,7 @@ index c74a2e04e..d45a8759b 100644
  
    mtk_x11_error_trap_pop (x11_display->xdisplay);
  
-@@ -427,6 +478,7 @@ static void
+@@ -454,6 +503,7 @@ static void
  send_configure_notify (MetaFrame *frame)
  {
    MetaX11Display *x11_display = frame->window->display->x11_display;
@@ -622,7 +675,7 @@ index c74a2e04e..d45a8759b 100644
    XEvent event = { 0 };
  
    /* We never get told by the frames client, just reassert the
-@@ -436,10 +488,16 @@ send_configure_notify (MetaFrame *frame)
+@@ -463,10 +513,16 @@ send_configure_notify (MetaFrame *frame)
    event.xconfigure.display = x11_display->xdisplay;
    event.xconfigure.event = frame->xwindow;
    event.xconfigure.window = frame->xwindow;
@@ -841,10 +894,10 @@ index e8d442c03..834753ffd 100644
  
  struct _MetaWaylandCompositor
 diff --git a/src/wayland/meta-wayland-surface.c b/src/wayland/meta-wayland-surface.c
-index 6dc5006b7..81ee47bbd 100644
+index c9b921583..eb15f3fdb 100644
 --- a/src/wayland/meta-wayland-surface.c
 +++ b/src/wayland/meta-wayland-surface.c
-@@ -781,8 +781,19 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
+@@ -782,8 +782,19 @@ meta_wayland_surface_apply_state (MetaWaylandSurface      *surface,
            state->buffer->type != META_WAYLAND_BUFFER_TYPE_SINGLE_PIXEL));
      }
  
@@ -866,7 +919,7 @@ index 6dc5006b7..81ee47bbd 100644
  
    if (state->has_new_buffer_transform)
      surface->buffer_transform = state->buffer_transform;
-@@ -977,8 +988,9 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
+@@ -978,8 +989,9 @@ meta_wayland_surface_commit (MetaWaylandSurface *surface)
        MetaMultiTexture *committed_texture = surface->committed_state.texture;
        int committed_scale = surface->committed_state.scale;
  
@@ -876,9 +929,9 @@ index 6dc5006b7..81ee47bbd 100644
 +           (meta_multi_texture_get_height (committed_texture) % committed_scale != 0)) &&
 +          !meta_wayland_surface_is_xwayland (surface))
          {
-           if (!surface->role || !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
+           if (surface->role && !META_IS_WAYLAND_CURSOR_SURFACE (surface->role))
              {
-@@ -1506,6 +1518,16 @@ meta_wayland_surface_update_outputs (MetaWaylandSurface *surface)
+@@ -1507,6 +1519,16 @@ meta_wayland_surface_update_outputs (MetaWaylandSurface *surface)
    g_hash_table_foreach (surface->compositor->outputs,
                          update_surface_output_state,
                          surface);
@@ -2091,10 +2144,10 @@ index 205eaaa63..fa3fbea6a 100644
 +                                        int           *stage_width,
 +                                        int           *stage_heigth);
 -- 
-2.45.1
+2.45.2
 
 
-From 09712dd9002a7289e7e7aa34ca439f0dd7c5b386 Mon Sep 17 00:00:00 2001
+From d65f387cf7b315740b12e4bcec984dde1332cbb6 Mon Sep 17 00:00:00 2001
 From: HydroH <ixlesis@gmail.com>
 Date: Tue, 21 May 2024 19:14:55 +0800
 Subject: [PATCH 5/6] Fix incorrect value for xwayland-native-scaling in
@@ -2118,10 +2171,10 @@ index 18abd8d51..6751a8d7a 100644
  
    <schema id="org.gnome.mutter" path="/org/gnome/mutter/"
 -- 
-2.45.1
+2.45.2
 
 
-From 010f3ad2b0059ce7f137aa6e20422b963431a142 Mon Sep 17 00:00:00 2001
+From 8db7886306db9647916bbbda1062b139b9109fb5 Mon Sep 17 00:00:00 2001
 From: HydroH <ixlesis@gmail.com>
 Date: Tue, 21 May 2024 19:15:36 +0800
 Subject: [PATCH 6/6] Correctly set bounding region for undecorated windows
@@ -2151,5 +2204,5 @@ index b72d5b6d5..c48b91e93 100644
  
    if (META_X11_DISPLAY_HAS_SHAPE (x11_display))
 -- 
-2.45.1
+2.45.2
 
