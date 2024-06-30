@@ -13,7 +13,7 @@
 
 pkgname=mutter-xwayland-scaling
 pkgver=46.3
-pkgrel=1
+pkgrel=2
 pkgdesc="Window manager and compositor for GNOME with Xwayland fractional scaling patch"
 url="https://gitlab.gnome.org/GNOME/mutter"
 arch=(x86_64)
@@ -93,7 +93,7 @@ source=(
   "xwayland-scaling.patch"
 )
 b2sums=('b228db453c22a94783ceed71eb9489117e0576293f6daa37b7f20b6992b80ee4e67ebeee3b1cf474d306d2341e8d0e26b16820cec9d6c53132ddc7ffd4157634'
-        '4eaf9ecc54e7cb876990aed7f4afc7e199e40a20b0268bb2b26e97a980787a234b4ed4f15de5ef620d10e9dbc51d75a967820c516cdf28f09b5db20196e965e9')
+        'e1ff0bdf8fa02a612529a399441a5e8c66e2dd8c501619cc4d28dd9df2c748531be9299297bc40a2bf00d00e4e77c700053a4627ba07bbcbb06ef77dee9f91b5')
 
 prepare() {
   cd mutter
