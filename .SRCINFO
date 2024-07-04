@@ -1,7 +1,7 @@
 pkgbase = mutter-xwayland-scaling
 	pkgdesc = Window manager and compositor for GNOME with Xwayland fractional scaling patch
-	pkgver = 46.3
-	pkgrel = 2
+	pkgver = 46.3.1
+	pkgrel = 1
 	url = https://gitlab.gnome.org/GNOME/mutter
 	arch = x86_64
 	license = GPL-2.0-or-later
@@ -68,12 +68,12 @@ pkgbase = mutter-xwayland-scaling
 	depends = systemd-libs
 	depends = wayland
 	depends = xorg-xwayland
-	provides = mutter=46.3
+	provides = mutter=46.3.1
 	provides = libmutter-14.so
 	conflicts = mutter
-	source = git+https://gitlab.gnome.org/GNOME/mutter.git#tag=46.3
+	source = git+https://gitlab.gnome.org/GNOME/mutter.git#tag=46.3.1
 	source = xwayland-scaling.patch
-	b2sums = b228db453c22a94783ceed71eb9489117e0576293f6daa37b7f20b6992b80ee4e67ebeee3b1cf474d306d2341e8d0e26b16820cec9d6c53132ddc7ffd4157634
+	b2sums = 7d9041df986220470c287fe65194ec6e4da8f15540140fb7e0c3fddc95ce6e9ec9fd4f691ed349a31af28e903c769c97d9817ac65c3cc424b002e095cf559606
 	b2sums = e1ff0bdf8fa02a612529a399441a5e8c66e2dd8c501619cc4d28dd9df2c748531be9299297bc40a2bf00d00e4e77c700053a4627ba07bbcbb06ef77dee9f91b5
 
 pkgname = mutter-xwayland-scaling
